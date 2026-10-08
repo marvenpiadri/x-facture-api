@@ -1,59 +1,264 @@
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium-min';
-import { generateFacturX } from '@stackforge-eu/factur-x';
+import {
+  embedFacturX,
+  validateInput,
+  Profile,
+  Flavor
+} from '@stackforge-eu/factur-x';
+import {
+  errorResponse,
+  handleOptions,
+  isPlainObject,
+  methodNotAllowed,
+  parseJsonBody,
+  prepareResponse
+} from '../lib/http.js';
+
+const MAX_HTML_BYTES = 1_500_000;
+const MAX_ITEMS = 200;
+const CHROMIUM_PACK_URL =
+  process.env.CHROMIUM_PACK_URL ||
+  'https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar';
+
+const text = (value, max = 500) =>
+  typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
+
+const num = (value, fallback = 0) => {
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+function country(value) {
+  const code = text(value, 2)?.toUpperCase();
+  return /^[A-Z]{2}$/.test(code || '') ? code : undefined;
+}
+
+function addressFrom(source) {
+  const address = source?.address || {};
+  const result = {
+    line1: text(address.line1 || source.addressLine1 || source.street, 200),
+    line2: text(address.line2 || source.addressLine2, 200),
+    city: text(address.city || source.city, 100),
+    postalCode: text(address.postalCode || source.postalCode || source.zip, 30),
+    country: country(address.country || source.country)
+  };
+  return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== undefined));
+}
+
+function taxRegistration(source) {
+  const vatId = text(source?.vatId || source?.vat || source?.taxId, 100);
+  if (!vatId) return undefined;
+  return [{ id: vatId, schemeId: 'VA' }];
+}
+
+function buildInvoiceInput(data) {
+  const items = data.items;
+  if (!Array.isArray(items) || items.length === 0 || items.length > MAX_ITEMS) {
+    throw new Error(`items must contain between 1 and ${MAX_ITEMS} entries.`);
+  }
+
+  const currency = text(data.currency, 3)?.toUpperCase() || 'EUR';
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error('currency must be a 3-letter ISO code.');
+
+  const lines = items.map((item, index) => {
+    if (!isPlainObject(item)) throw new Error(`Item ${index + 1} must be an object.`);
+
+    const quantity = num(item.quantity ?? item.qty, 1);
+    const unitPrice = num(item.unitPrice ?? item.price);
+    const vatRate = num(item.vatRate ?? item.vatPercentage);
+    const lineTotal = round2(quantity * unitPrice);
+
+    if (quantity <= 0 || unitPrice < 0 || vatRate < 0 || vatRate > 100) {
+      throw new Error(`Invalid values for item ${index + 1}.`);
+    }
+
+    return {
+      id: String(index + 1),
+      name: text(item.description || item.name, 500) || `Item ${index + 1}`,
+      quantity,
+      unitCode: text(item.unitCode, 10) || 'C62',
+      unitPrice,
+      lineTotal,
+      vatCategoryCode: 'S',
+      vatRatePercent: vatRate
+    };
+  });
+
+  const lineTotal = round2(lines.reduce((sum, line) => sum + line.lineTotal, 0));
+  const vatGroups = new Map();
+
+  for (const line of lines) {
+    const key = line.vatRatePercent.toFixed(2);
+    const group = vatGroups.get(key) || {
+      categoryCode: 'S',
+      ratePercent: line.vatRatePercent,
+      taxableAmount: 0,
+      taxAmount: 0
+    };
+    group.taxableAmount = round2(group.taxableAmount + line.lineTotal);
+    group.taxAmount = round2(group.taxAmount + (line.lineTotal * line.vatRatePercent) / 100);
+    vatGroups.set(key, group);
+  }
+
+  const taxTotal = round2([...vatGroups.values()].reduce((sum, group) => sum + group.taxAmount, 0));
+  const taxBasisTotal = round2(lineTotal);
+  const grandTotal = round2(taxBasisTotal + taxTotal);
+  const amountPaid = Math.min(grandTotal, Math.max(0, num(data.amountPaid)));
+  const duePayableAmount = round2(grandTotal - amountPaid);
+
+  const seller = {
+    name: text(data.sellerName || data.seller?.name),
+    address: addressFrom(data.seller || data),
+    taxRegistrations: taxRegistration(data.seller || {
+      vatId: data.sellerVat
+    })
+  };
+
+  const buyerSource = data.buyer || {
+    name: data.buyerName,
+    vatId: data.buyerVat,
+    address: {
+      line1: data.buyerAddressLine1,
+      line2: data.buyerAddressLine2,
+      city: data.buyerCity,
+      postalCode: data.buyerPostalCode,
+      country: data.buyerCountry
+    }
+  };
+
+  const buyer = {
+    name: text(buyerSource.name),
+    address: addressFrom(buyerSource),
+    taxRegistrations: taxRegistration(buyerSource)
+  };
+
+  const issueDate = text(data.date || data.issueDate, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(issueDate || '')) {
+    throw new Error('date must use YYYY-MM-DD format.');
+  }
+
+  const id = text(data.id || data.invoiceNumber, 100);
+  if (!id) throw new Error('Invoice id is required.');
+
+  return {
+    document: {
+      id,
+      issueDate,
+      typeCode: '380',
+      dueDate: text(data.dueDate, 10)
+    },
+    seller,
+    buyer,
+    lines,
+    totals: {
+      lineTotal,
+      taxBasisTotal,
+      taxTotal,
+      grandTotal,
+      duePayableAmount,
+      currency
+    },
+    vatBreakdown: [...vatGroups.values()],
+    ...(data.payment?.iban ? {
+      payment: {
+        meansCode: text(data.payment.meansCode, 10) || '58',
+        iban: text(data.payment.iban, 34),
+        dueDate: text(data.dueDate, 10)
+      }
+    } : {})
+  };
+}
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+  prepareResponse(req, res);
+  if (handleOptions(req, res)) return;
+  if (req.method !== 'POST') return methodNotAllowed(res, 'POST, OPTIONS');
 
+  const body = parseJsonBody(req);
+  if (!isPlainObject(body)) {
+    return errorResponse(res, 400, 'INVALID_JSON', 'Request body must be a JSON object.');
+  }
+
+  const htmlLayout = typeof body.htmlLayout === 'string' ? body.htmlLayout : '';
+  if (!htmlLayout) return errorResponse(res, 400, 'MISSING_HTML', 'htmlLayout is required.');
+  if (Buffer.byteLength(htmlLayout, 'utf8') > MAX_HTML_BYTES) {
+    return errorResponse(res, 413, 'HTML_TOO_LARGE', 'htmlLayout exceeds the 1.5 MB limit.');
+  }
+  if (!isPlainObject(body.rawInvoiceData)) {
+    return errorResponse(res, 400, 'MISSING_INVOICE_DATA', 'rawInvoiceData must be a JSON object.');
+  }
+
+  let browser;
   try {
-    const { htmlLayout, rawInvoiceData } = req.body;
-    const remotePackUrl = "https://github.com";
+    const invoice = buildInvoiceInput(body.rawInvoiceData);
 
-    // 1. Launch Serverless Chromium
-    const browser = await puppeteer.launch({
-      args: chromium.args,
+    const validation = validateInput(invoice, Profile.EN16931);
+    if (!validation.valid) {
+      return errorResponse(res, 422, 'INVALID_FACTUR_X_DATA', 'Invoice data does not satisfy EN 16931 requirements.', validation.errors);
+    }
+
+    const executablePath = await chromium.executablePath(CHROMIUM_PACK_URL);
+
+    browser = await puppeteer.launch({
+      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(remotePackUrl),
-      headless: chromium.headless,
+      executablePath,
+      headless: chromium.headless
     });
-    
-    const page = await browser.newPage();
-    await page.setContent(htmlLayout, { waitUntil: 'networkidle0' });
-    const standardPdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
-    await browser.close();
 
-    // 2. Compile into a verified European Factur-X PDF/A-3 container
-    const compliantPdfBuffer = await generateFacturX({
-      pdf: standardPdfBuffer,
-      profile: 'EN16931', 
-      invoice: {
-        id: rawInvoiceData.id,
-        issueDate: rawInvoiceData.date,
-        currency: rawInvoiceData.currency || 'EUR',
-        seller: {
-          name: rawInvoiceData.sellerName,
-          vatId: rawInvoiceData.sellerVat,
-          registrationId: rawInvoiceData.sellerSiret
-        },
-        buyer: {
-          name: rawInvoiceData.buyerName,
-          vatId: rawInvoiceData.buyerVat
-        },
-        lines: rawInvoiceData.items.map(item => ({
-          name: item.description,
-          quantity: item.qty,
-          price: item.unitPrice,
-          vatRate: item.vatPercentage
-        }))
+    const page = await browser.newPage();
+    await page.setJavaScriptEnabled(false);
+
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.startsWith('data:') || url.startsWith('blob:') || url === 'about:blank') {
+        request.continue();
+      } else {
+        request.abort();
       }
     });
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${rawInvoiceData.id}.pdf`);
-    return res.send(compliantPdfBuffer);
+    await page.setContent(htmlLayout, {
+      waitUntil: 'domcontentloaded',
+      timeout: 10000
+    });
+    await page.emulateMediaType('print');
 
+    const standardPdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      preferCSSPageSize: true,
+      margin: { top: '0', right: '0', bottom: '0', left: '0' }
+    });
+
+    const result = await embedFacturX({
+      pdf: standardPdfBuffer,
+      input: invoice,
+      profile: Profile.EN16931,
+      flavor: Flavor.FACTUR_X,
+      validateXsd: true
+    });
+
+    const safeId = invoice.document.id.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeId || 'invoice'}.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).send(result.pdf);
   } catch (error) {
-    console.error('Factur-X Serverless Pipeline Failure:', error);
-    return res.status(500).send('Compliance Compilation Failed');
+    console.error('generate-invoice:', error);
+    return errorResponse(res, 500, 'INVOICE_GENERATION_FAILED', 'The invoice could not be generated.');
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (error) {
+        console.error('browser-close:', error);
+      }
+    }
   }
 }
