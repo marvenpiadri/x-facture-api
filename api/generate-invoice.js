@@ -223,12 +223,18 @@ export default async function handler(req, res) {
       validateXsd: true
     });
 
+    const pdf = Buffer.from(result.pdf);
+    if (pdf.subarray(0, 5).toString() !== '%PDF-') {
+      throw Object.assign(new Error('Factur-X embedding returned invalid PDF bytes.'), { phase: 'factur-x-output-validation' });
+    }
+
     const safeId = invoice.document.id.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
 
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', String(pdf.length));
     res.setHeader('Content-Disposition', `attachment; filename="${safeId || 'invoice'}.pdf"`);
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).send(result.pdf);
+    return res.status(200).send(pdf);
   } catch (error) {
     const phase = error?.phase || 'unknown';
     const message = error instanceof Error ? error.message : String(error);
