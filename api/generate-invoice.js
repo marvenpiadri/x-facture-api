@@ -1,5 +1,3 @@
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium-min';
 import {
   embedFacturX,
   validateInput,
@@ -14,12 +12,10 @@ import {
   parseJsonBody,
   prepareResponse
 } from '../lib/http.js';
+import { renderPdf } from '../lib/pdf-renderer.js';
 
 const MAX_HTML_BYTES = 1_500_000;
 const MAX_ITEMS = 200;
-const CHROMIUM_PACK_URL =
-  process.env.CHROMIUM_PACK_URL ||
-  'https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar';
 
 const text = (value, max = 500) =>
   typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
@@ -191,55 +187,32 @@ export default async function handler(req, res) {
     return errorResponse(res, 400, 'MISSING_INVOICE_DATA', 'rawInvoiceData must be a JSON object.');
   }
 
-  let browser;
-  let phase = 'input-validation';
+  const paperSize = typeof body.paperSize === 'string'
+    ? body.paperSize.toLowerCase()
+    : 'a4';
+
+  if (!['a4', 'letter'].includes(paperSize)) {
+    return errorResponse(res, 400, 'INVALID_PAPER_SIZE', 'paperSize must be either a4 or letter.');
+  }
+
   try {
+    let phase = 'input-validation';
     const invoice = buildInvoiceInput(body.rawInvoiceData);
 
     phase = 'factur-x-input-validation';
     const validation = validateInput(invoice, Profile.EN16931);
     if (!validation.valid) {
-      return errorResponse(res, 422, 'INVALID_FACTUR_X_DATA', 'Invoice data does not satisfy EN 16931 requirements.', validation.errors);
+      return errorResponse(
+        res,
+        422,
+        'INVALID_FACTUR_X_DATA',
+        'Invoice data does not satisfy EN 16931 requirements.',
+        validation.errors
+      );
     }
 
-    phase = 'chromium-startup';
-    const executablePath = await chromium.executablePath(CHROMIUM_PACK_URL);
-
-    browser = await puppeteer.launch({
-      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
-      defaultViewport: chromium.defaultViewport,
-      executablePath,
-      headless: chromium.headless
-    });
-
-    phase = 'page-setup';
-    const page = await browser.newPage();
-    await page.setJavaScriptEnabled(false);
-
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const url = request.url();
-      if (url.startsWith('data:') || url.startsWith('blob:') || url === 'about:blank') {
-        request.continue();
-      } else {
-        request.abort();
-      }
-    });
-
-    phase = 'html-rendering';
-    await page.setContent(htmlLayout, {
-      waitUntil: 'domcontentloaded',
-      timeout: 10000
-    });
-    await page.emulateMediaType('print');
-
-    phase = 'pdf-generation';
-    const standardPdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      preferCSSPageSize: true,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' }
-    });
+    phase = 'pdf-rendering';
+    const standardPdfBuffer = await renderPdf(htmlLayout, paperSize);
 
     phase = 'factur-x-embedding';
     const result = await embedFacturX({
@@ -257,20 +230,16 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).send(result.pdf);
   } catch (error) {
-    console.error('generate-invoice:', { phase, error });
+    const phase = error?.phase || 'factur-x-embedding';
     const message = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : undefined;
-    return errorResponse(res, 500, 'INVOICE_GENERATION_FAILED', message || 'The invoice could not be generated.', {
-      phase,
-      stack
-    });
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (error) {
-        console.error('browser-close:', error);
-      }
-    }
+    console.error('generate-invoice:', { phase, error });
+
+    return errorResponse(
+      res,
+      500,
+      'INVOICE_GENERATION_FAILED',
+      message || 'The invoice could not be generated.',
+      { phase }
+    );
   }
 }
