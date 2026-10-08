@@ -1,0 +1,12 @@
+{
+  "name": "x-facture-api",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@sparticuz/chromium-min": "131.0.0",
+    "@stackforge-eu/factur-x": "1.4.2",
+    "axios": "^1.7.0",
+    "puppeteer-core": "23.6.0",
+    "qrcode": "^1.5.4"
+  }
+}
