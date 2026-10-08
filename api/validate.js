@@ -64,9 +64,10 @@ export default async function handler(req, res) {
     if (!xml.trim()) return errorResponse(res, 400, 'MISSING_DOCUMENT', 'Provide XML or pdfBase64.');
 
     const xsd = await validateXsd(xml, profile.schema);
+    const shouldRunBusinessRules = ['en16931', 'extended'].includes(profile.level);
     let businessRules = null;
 
-    if (xsd.valid) {
+    if (xsd.valid && shouldRunBusinessRules) {
       try {
         businessRules = await check({
           xml,
@@ -93,7 +94,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      valid: Boolean(xsd.valid && businessRules?.valid && businessRules?.schematronValid !== false),
+      valid: Boolean(xsd.valid && (!shouldRunBusinessRules || (businessRules?.valid && businessRules?.schematronValid !== false))),
       profile: requestedProfile === 'basicwl' ? 'basic-wl' : requestedProfile,
       source,
       filename,
@@ -101,8 +102,8 @@ export default async function handler(req, res) {
       checks: {
         xmlWellFormed: true,
         facturXProfileXsd: Boolean(xsd.valid),
-        en16931BusinessRules: businessRules ? Boolean(businessRules.valid) : null,
-        schematron: businessRules ? businessRules.schematronValid ?? null : null
+        en16931BusinessRules: shouldRunBusinessRules && businessRules ? Boolean(businessRules.valid) : null,
+        schematron: shouldRunBusinessRules && businessRules ? businessRules.schematronValid ?? null : null
       },
       errors,
       french2026: {
