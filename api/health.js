@@ -1,16 +1,20 @@
-import { handleOptions, methodNotAllowed, prepareResponse } from '../lib/http.js';
-
-export default async function handler(req, res) {
-  const requestId = prepareResponse(req, res);
-  if (handleOptions(req, res)) return;
-  if (req.method !== 'GET') return methodNotAllowed(res, 'GET, OPTIONS');
+export default function handler(req, res) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    return res.status(405).json({
+      success: false,
+      error: {
+        code: 'METHOD_NOT_ALLOWED',
+        message: 'Method not allowed.'
+      }
+    });
+  }
 
   return res.status(200).json({
     success: true,
     service: 'x-facture-api',
     status: 'ok',
     version: 'v1',
-    requestId,
     timestamp: new Date().toISOString()
   });
 }
