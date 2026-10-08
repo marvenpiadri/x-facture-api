@@ -8,7 +8,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "check": "node --check api/health.js && node --check api/currency-rates.js && node --check api/generate-qr.js && node --check api/invoice-calculate.js && node --check api/generate-pdf.js && node --check api/generate-invoice.js && node --check lib/http.js && node --check lib/pdf-renderer.js && node --check api/extract-attachments.js"
+    "check": "node --check api/health.js && node --check api/currency-rates.js && node --check api/generate-qr.js && node --check api/invoice-calculate.js && node --check api/generate-pdf.js && node --check api/generate-invoice.js && node --check api/validate.js && node --check api/validate-order-x.js && node --check api/extract-attachments.js && node --check lib/http.js && node --check lib/pdf-renderer.js"
   },
   "dependencies": {
     "@sparticuz/chromium-min": "153.0.0",
