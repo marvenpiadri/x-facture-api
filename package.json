@@ -8,13 +8,14 @@
     "node": "22.x"
   },
   "scripts": {
-    "check": "node --check api/health.js && node --check api/currency-rates.js && node --check api/generate-qr.js && node --check api/invoice-calculate.js && node --check api/generate-pdf.js && node --check api/generate-invoice.js && node --check lib/http.js && node --check lib/pdf-renderer.js"
+    "check": "node --check api/health.js && node --check api/currency-rates.js && node --check api/generate-qr.js && node --check api/invoice-calculate.js && node --check api/generate-pdf.js && node --check api/generate-invoice.js && node --check lib/http.js && node --check lib/pdf-renderer.js && node --check api/extract-attachments.js"
   },
   "dependencies": {
     "@sparticuz/chromium-min": "153.0.0",
     "@stackforge-eu/factur-x": "1.4.3",
     "puppeteer-core": "25.11.0",
     "qrcode": "1.5.4",
-    "@stafyniaksacha/facturx": "0.6.1"
+    "@stafyniaksacha/facturx": "0.6.1",
+    "pdf-lib": "^1.17.1"
   }
 }
