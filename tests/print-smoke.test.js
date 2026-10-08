@@ -16,7 +16,7 @@ test('Factur-X generation returns a PDF artifact', async () => {
     deliveryCountry: 'FR',
     currency: 'EUR',
     sellerName: 'X Facture Test SARL',
-    seller: { name: 'X Facture Test SARL', address: { line1: '10 Rue de Test', city: 'Paris', postalCode: '75001', country: 'FR' } },
+    seller: { name: 'X Facture Test SARL', vatId: 'FR12345678901', address: { line1: '10 Rue de Test', city: 'Paris', postalCode: '75001', country: 'FR' } },
     buyer: { name: 'Example Customer', address: { line1: '25 Avenue Exemple', city: 'Lyon', postalCode: '69001', country: 'FR' } },
     items: [{ description: 'Consulting service', quantity: 2, unitPrice: 100, vatRate: 20, unitCode: 'C62' }]
   };
