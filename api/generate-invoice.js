@@ -111,6 +111,7 @@ function buildInvoiceInput(data) {
     taxRegistrations: taxRegistration(data.seller || {
       vatId: data.sellerVat
     }),
+    ...(data.sellerSiren ? { legalOrganization: { id: text(data.sellerSiren, 9), schemeID: '0002' } } : {}),
     ...(data.seller?.electronicAddress && data.seller?.electronicAddressScheme ? {
       electronicAddress: {
         value: text(data.seller.electronicAddress, 200),
@@ -135,6 +136,7 @@ function buildInvoiceInput(data) {
     name: text(buyerSource.name),
     address: addressFrom(buyerSource),
     taxRegistrations: taxRegistration(buyerSource),
+    ...(data.buyerSiren ? { legalOrganization: { id: text(data.buyerSiren, 9), schemeID: '0002' } } : {}),
     ...(buyerSource.electronicAddress && buyerSource.electronicAddressScheme ? {
       electronicAddress: {
         value: text(buyerSource.electronicAddress, 200),
@@ -156,7 +158,8 @@ function buildInvoiceInput(data) {
       id,
       issueDate,
       typeCode: data.documentType === 'credit-notes' ? '381' : '380',
-      dueDate: text(data.dueDate, 10)
+      dueDate: text(data.dueDate, 10),
+      buyerReference: text(data.buyerReference, 70)
     },
     seller,
     buyer,
@@ -174,7 +177,20 @@ function buildInvoiceInput(data) {
       payment: {
         meansCode: text(data.payment.meansCode, 10) || '58',
         iban: text(data.payment.iban, 34),
-        dueDate: text(data.dueDate, 10)
+        bic: text(data.payment.bic, 11),
+        dueDate: text(data.dueDate, 10),
+        paymentReference: text(data.id, 70)
+      }
+    } : {}),
+    ...(data.deliveryDate || data.deliveryAddressLine1 ? {
+      delivery: {
+        date: text(data.deliveryDate, 10),
+        location: {
+          line1: text(data.deliveryAddressLine1, 200),
+          city: text(data.deliveryCity, 100),
+          postalCode: text(data.deliveryPostalCode, 30),
+          country: country(data.deliveryCountry)
+        }
       }
     } : {})
   };
