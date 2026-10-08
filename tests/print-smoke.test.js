@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PDFDocument } from 'pdf-lib';
 import generateInvoiceHandler from '../api/generate-invoice.js';
+import validateHandler from '../api/validate.js';
 
 test('Factur-X generation returns a PDF artifact', async () => {
   const htmlLayout = '<html><head><style>body{font-family:Arial,sans-serif}</style></head><body><h1>Print test</h1><p>Invoice FX-PRINT-TEST-001</p></body></html>';
@@ -23,4 +24,13 @@ test('Factur-X generation returns a PDF artifact', async () => {
   assert.equal(res.body.subarray(0, 5).toString(), '%PDF-');
   const pdf = await PDFDocument.load(res.body);
   assert.ok(pdf.getPageCount() > 0);
+  const validationReq = { method: 'POST', headers: {}, body: { pdfBase64: res.body.toString('base64'), profile: 'en16931' } };
+  const validationRes = { statusCode: 200, body: undefined, setHeader(){return this;}, status(c){this.statusCode=c;return this;}, json(v){this.body=v;return this;}, end(){return this;} };
+  await validateHandler(validationReq, validationRes);
+  assert.equal(validationRes.statusCode, 200, JSON.stringify(validationRes.body));
+  assert.equal(validationRes.body.source, 'pdf');
+  assert.equal(validationRes.body.valid, true, JSON.stringify(validationRes.body.errors));
+  assert.equal(validationRes.body.checks.facturXProfileXsd, true);
+  assert.equal(validationRes.body.checks.en16931BusinessRules, true);
+  assert.equal(validationRes.body.checks.schematron, true);
 });
