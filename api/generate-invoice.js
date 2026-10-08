@@ -192,6 +192,7 @@ export default async function handler(req, res) {
   }
 
   let browser;
+  let phase = 'input-validation';
   try {
     const invoice = buildInvoiceInput(body.rawInvoiceData);
 
