@@ -9,6 +9,7 @@ test('Factur-X generation returns a PDF artifact', async () => {
   const rawInvoiceData = {
     id: 'FX-PRINT-TEST-001',
     date: '2026-10-08',
+    deliveryDate: '2026-10-08',
     currency: 'EUR',
     sellerName: 'X Facture Test SARL',
     seller: { name: 'X Facture Test SARL', address: { line1: '10 Rue de Test', city: 'Paris', postalCode: '75001', country: 'FR' } },
