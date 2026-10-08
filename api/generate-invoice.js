@@ -136,7 +136,7 @@ function buildInvoiceInput(data) {
   };
 
   const issueDate = text(data.date || data.issueDate, 10);
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(issueDate || '')) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(issueDate || '')) {
     throw new Error('date must use YYYY-MM-DD format.');
   }
 
