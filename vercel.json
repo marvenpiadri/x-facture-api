@@ -1,10 +1,25 @@
 {
   "version": 2,
   "functions": {
-    "api/generate-invoice.js": { "memory": 1536, "maxDuration": 30, "runtime": "nodejs22.x" },
-    "api/generate-qr.js": { "memory": 256, "maxDuration": 10, "runtime": "nodejs22.x" },
-    "api/currency-rates.js": { "memory": 256, "maxDuration": 10, "runtime": "nodejs22.x" },
-    "api/invoice-calculate.js": { "memory": 256, "maxDuration": 10, "runtime": "nodejs22.x" },
-    "api/health.js": { "memory": 128, "maxDuration": 5, "runtime": "nodejs22.x" }
+    "api/generate-invoice.js": {
+      "memory": 1536,
+      "maxDuration": 30
+    },
+    "api/generate-qr.js": {
+      "memory": 256,
+      "maxDuration": 10
+    },
+    "api/currency-rates.js": {
+      "memory": 256,
+      "maxDuration": 10
+    },
+    "api/invoice-calculate.js": {
+      "memory": 256,
+      "maxDuration": 10
+    },
+    "api/health.js": {
+      "memory": 128,
+      "maxDuration": 5
+    }
   }
 }
