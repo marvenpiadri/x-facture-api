@@ -1,4 +1,5 @@
 import { extractXml, validateXsd, Profile } from '@stackforge-eu/factur-x';
+import { check } from '@stafyniaksacha/facturx';
 import { errorResponse, handleOptions, methodNotAllowed, parseJsonBody, prepareResponse } from '../lib/http.js';
 
 const MAX_BYTES = 12 * 1024 * 1024;
@@ -50,19 +51,31 @@ export default async function handler(req, res) {
     if (!xml) return errorResponse(res, 400, 'MISSING_DOCUMENT', 'Provide XML or pdfBase64.');
 
     const result = await validateXsd(xml, profile);
+    let businessRules = null;
+    try {
+      businessRules = await check({ xml, schematron: true });
+    } catch {
+      businessRules = null;
+    }
+    const errors = [...(result.errors || []), ...((businessRules && Array.isArray(businessRules.errors)) ? businessRules.errors : [])];
     return res.status(200).json({
       success: true,
-      valid: result.valid,
+      valid: result.valid && (businessRules ? businessRules.valid && businessRules.schematronValid !== false : true),
       profile: String(body.profile || 'en16931'),
       source,
       filename,
       detectedProfile,
       checks: {
         xmlWellFormed: true,
-        facturXProfileXsd: result.valid
+        facturXProfileXsd: result.valid,
+        en16931BusinessRules: businessRules ? businessRules.valid : null,
+        schematron: businessRules ? businessRules.schematronValid : null
       },
-      errors: result.errors || [],
-      note: 'XSD validation is authoritative for the selected Factur-X profile. French BR-FR/2026 CIUS validation is a separate rule layer and is not inferred from XSD success.'
+      errors,
+      french2026: {
+        status: 'readiness-layer',
+        message: 'French BR-FR/2026 CIUS checks are tracked separately from the generic EN 16931 Schematron layer.'
+      }
     });
   } catch (error) {
     return errorResponse(res, 422, 'VALIDATION_FAILED', error instanceof Error ? error.message : String(error));
