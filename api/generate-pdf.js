@@ -38,7 +38,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const pdf = await renderPdf(htmlLayout, paperSize);
+    const pdf = await renderPdf(htmlLayout, paperSize);\n    if (!Buffer.isBuffer(pdf) || pdf.subarray(0, 5).toString() !== '%PDF-') {\n      throw Object.assign(new Error('PDF renderer returned invalid PDF bytes.'), { phase: 'pdf-validation' });\n    }\n    res.setHeader('Content-Length', String(pdf.length));
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="document.pdf"');
