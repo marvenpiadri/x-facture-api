@@ -230,7 +230,7 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).send(result.pdf);
   } catch (error) {
-    const phase = error?.phase || 'factur-x-embedding';
+    const phase = error?.phase || 'unknown';
     const message = error instanceof Error ? error.message : String(error);
     console.error('generate-invoice:', { phase, error });
 
