@@ -195,11 +195,13 @@ export default async function handler(req, res) {
   try {
     const invoice = buildInvoiceInput(body.rawInvoiceData);
 
+    phase = 'factur-x-input-validation';
     const validation = validateInput(invoice, Profile.EN16931);
     if (!validation.valid) {
       return errorResponse(res, 422, 'INVALID_FACTUR_X_DATA', 'Invoice data does not satisfy EN 16931 requirements.', validation.errors);
     }
 
+    phase = 'chromium-startup';
     const executablePath = await chromium.executablePath(CHROMIUM_PACK_URL);
 
     browser = await puppeteer.launch({
@@ -209,6 +211,7 @@ export default async function handler(req, res) {
       headless: chromium.headless
     });
 
+    phase = 'page-setup';
     const page = await browser.newPage();
     await page.setJavaScriptEnabled(false);
 
@@ -222,12 +225,14 @@ export default async function handler(req, res) {
       }
     });
 
+    phase = 'html-rendering';
     await page.setContent(htmlLayout, {
       waitUntil: 'domcontentloaded',
       timeout: 10000
     });
     await page.emulateMediaType('print');
 
+    phase = 'pdf-generation';
     const standardPdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -235,6 +240,7 @@ export default async function handler(req, res) {
       margin: { top: '0', right: '0', bottom: '0', left: '0' }
     });
 
+    phase = 'factur-x-embedding';
     const result = await embedFacturX({
       pdf: standardPdfBuffer,
       input: invoice,
@@ -250,8 +256,13 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).send(result.pdf);
   } catch (error) {
-    console.error('generate-invoice:', error);
-    return errorResponse(res, 500, 'INVOICE_GENERATION_FAILED', 'The invoice could not be generated.');
+    console.error('generate-invoice:', { phase, error });
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    return errorResponse(res, 500, 'INVOICE_GENERATION_FAILED', message || 'The invoice could not be generated.', {
+      phase,
+      stack
+    });
   } finally {
     if (browser) {
       try {
