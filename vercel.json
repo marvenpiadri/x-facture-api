@@ -5,6 +5,10 @@
       "memory": 1536,
       "maxDuration": 30
     },
+    "api/generate-pdf.js": {
+      "memory": 1536,
+      "maxDuration": 30
+    },
     "api/generate-qr.js": {
       "memory": 256,
       "maxDuration": 10
