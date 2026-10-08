@@ -65,3 +65,20 @@ test('Order-X API endpoint validates a real Order-X document', async () => {
   assert.equal(res.body.flavor, 'orderx');
   assert.equal(res.body.level, 'basic');
 });
+
+test('well-formed XML with the wrong document root fails schema validation', async () => {
+  const req = { method: 'POST', headers: {}, body: { xml: '<NotAnInvoice/>', profile: 'en16931' } };
+  const res = mockResponse();
+  await validateHandler(req, res);
+  assert.ok(res.statusCode === 200 || res.statusCode === 422);
+  assert.ok(res.body.valid === false || res.body.success === false);
+  if (res.body.checks) assert.equal(res.body.checks.facturXProfileXsd, false);
+});
+
+test('unknown validation profiles are rejected explicitly', async () => {
+  const req = { method: 'POST', headers: {}, body: { xml: facturXXml, profile: 'not-a-profile' } };
+  const res = mockResponse();
+  await validateHandler(req, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error.code, 'INVALID_PROFILE');
+});
