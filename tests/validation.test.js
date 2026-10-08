@@ -6,6 +6,7 @@ import validateHandler from '../api/validate.js';
 import validateOrderXHandler from '../api/validate-order-x.js';
 
 const facturXXml = await readFile(new URL('./fixtures/factur-x-en16931.xml', import.meta.url), 'utf8');
+const facturXMinimumXml = await readFile(new URL('./fixtures/factur-x-minimum.xml', import.meta.url), 'utf8');
 const orderXXml = await readFile(new URL('./fixtures/order-x-basic.xml', import.meta.url), 'utf8');
 
 function mockResponse() {
@@ -81,4 +82,16 @@ test('unknown validation profiles are rejected explicitly', async () => {
   await validateHandler(req, res);
   assert.equal(res.statusCode, 400);
   assert.equal(res.body.error.code, 'INVALID_PROFILE');
+});
+
+test('minimum-profile invoices are validated against their XSD without EN 16931-only rules', async () => {
+  const req = { method: 'POST', headers: {}, body: { xml: facturXMinimumXml, profile: 'minimum' } };
+  const res = mockResponse();
+  await validateHandler(req, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.valid, true, JSON.stringify(res.body.errors));
+  assert.equal(res.body.checks.facturXProfileXsd, true);
+  assert.equal(res.body.checks.en16931BusinessRules, null);
+  assert.equal(res.body.checks.schematron, null);
 });
