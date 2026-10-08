@@ -10,13 +10,14 @@ export default async function handler(req, res) {
     return errorResponse(res, 400, 'MISSING_XML', 'xml is required.');
   }
   try {
-    const result = await check({ xml: body.xml, schematron: true });
+    const level = typeof body.level === 'string' && ['basic', 'comfort', 'extended'].includes(body.level) ? body.level : undefined;
+    const result = await check({ xml: body.xml, flavor: 'orderx', level });
     return res.status(200).json({
       success: true,
       valid: result.valid,
       errors: result.errors || [],
-      flavor: result.flavor,
-      level: result.level
+      flavor: result.flavor || 'orderx',
+      level: result.level || level || 'autodetect'
     });
   } catch (error) {
     return errorResponse(res, 422, 'ORDER_X_VALIDATION_FAILED', error instanceof Error ? error.message : String(error));
