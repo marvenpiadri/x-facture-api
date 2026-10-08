@@ -155,7 +155,7 @@ function buildInvoiceInput(data) {
     document: {
       id,
       issueDate,
-      typeCode: '380',
+      typeCode: data.documentType === 'credit-notes' ? '381' : '380',
       dueDate: text(data.dueDate, 10)
     },
     seller,
