@@ -110,7 +110,13 @@ function buildInvoiceInput(data) {
     address: addressFrom(data.seller || data),
     taxRegistrations: taxRegistration(data.seller || {
       vatId: data.sellerVat
-    })
+    }),
+    ...(data.seller?.electronicAddress && data.seller?.electronicAddressScheme ? {
+      electronicAddress: {
+        value: text(data.seller.electronicAddress, 200),
+        schemeID: text(data.seller.electronicAddressScheme, 20)
+      }
+    } : {})
   };
 
   const buyerSource = data.buyer || {
@@ -128,7 +134,13 @@ function buildInvoiceInput(data) {
   const buyer = {
     name: text(buyerSource.name),
     address: addressFrom(buyerSource),
-    taxRegistrations: taxRegistration(buyerSource)
+    taxRegistrations: taxRegistration(buyerSource),
+    ...(buyerSource.electronicAddress && buyerSource.electronicAddressScheme ? {
+      electronicAddress: {
+        value: text(buyerSource.electronicAddress, 200),
+        schemeID: text(buyerSource.electronicAddressScheme, 20)
+      }
+    } : {})
   };
 
   const issueDate = text(data.date || data.issueDate, 10);
