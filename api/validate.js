@@ -5,17 +5,13 @@ import { errorResponse, handleOptions, methodNotAllowed, parseJsonBody, prepareR
 const MAX_BYTES = 12 * 1024 * 1024;
 
 const profiles = new Map([
-  ['minimum', Profile.MINIMUM],
-  ['basic-wl', Profile.BASIC_WL],
-  ['basic', Profile.BASIC],
-  ['en16931', Profile.EN16931],
-  ['extended', Profile.EXTENDED]
+  ['minimum', { schema: Profile.MINIMUM, level: 'minimum' }],
+  ['basic-wl', { schema: Profile.BASIC_WL, level: 'basicwl' }],
+  ['basicwl', { schema: Profile.BASIC_WL, level: 'basicwl' }],
+  ['basic', { schema: Profile.BASIC, level: 'basic' }],
+  ['en16931', { schema: Profile.EN16931, level: 'en16931' }],
+  ['extended', { schema: Profile.EXTENDED, level: 'extended' }]
 ]);
-
-function getProfile(value) {
-  const key = String(value || 'en16931').toLowerCase();
-  return profiles.get(key) || Profile.EN16931;
-}
 
 function decodeBase64(value) {
   if (typeof value !== 'string' || !value) throw new Error('base64 data is required.');
@@ -24,16 +20,33 @@ function decodeBase64(value) {
   return buffer;
 }
 
+function uniqueErrors(...groups) {
+  const seen = new Set();
+  return groups.flatMap(group => Array.isArray(group) ? group : []).filter(error => {
+    const key = typeof error === 'string' ? error : JSON.stringify(error);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export default async function handler(req, res) {
   prepareResponse(req, res);
   if (handleOptions(req, res)) return;
   if (req.method !== 'POST') return methodNotAllowed(res, 'POST, OPTIONS');
 
   const body = parseJsonBody(req);
-  if (!body || typeof body !== 'object') return errorResponse(res, 400, 'INVALID_JSON', 'Request body must be an object.');
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return errorResponse(res, 400, 'INVALID_JSON', 'Request body must be an object.');
+  }
+
+  const requestedProfile = String(body.profile || 'en16931').trim().toLowerCase();
+  const profile = profiles.get(requestedProfile);
+  if (!profile) {
+    return errorResponse(res, 400, 'INVALID_PROFILE', 'profile must be minimum, basic-wl, basic, en16931, or extended.');
+  }
 
   try {
-    const profile = getProfile(body.profile);
     let xml = typeof body.xml === 'string' ? body.xml : '';
     let source = 'xml';
     let filename = 'factur-x.xml';
@@ -48,33 +61,53 @@ export default async function handler(req, res) {
       source = 'pdf';
     }
 
-    if (!xml) return errorResponse(res, 400, 'MISSING_DOCUMENT', 'Provide XML or pdfBase64.');
+    if (!xml.trim()) return errorResponse(res, 400, 'MISSING_DOCUMENT', 'Provide XML or pdfBase64.');
 
-    const result = await validateXsd(xml, profile);
+    const xsd = await validateXsd(xml, profile.schema);
     let businessRules = null;
-    try {
-      businessRules = await check({ xml, schematron: true });
-    } catch {
-      businessRules = null;
+
+    if (xsd.valid) {
+      try {
+        businessRules = await check({
+          xml,
+          flavor: 'facturx',
+          level: profile.level,
+          schematron: true
+        });
+      } catch (error) {
+        return errorResponse(
+          res,
+          503,
+          'BUSINESS_RULES_UNAVAILABLE',
+          'The XML passed profile XSD validation, but the EN 16931 Schematron check could not complete.',
+          error instanceof Error ? error.message : String(error)
+        );
+      }
     }
-    const errors = [...(result.errors || []), ...((businessRules && Array.isArray(businessRules.errors)) ? businessRules.errors : [])];
+
+    const errors = uniqueErrors(
+      xsd.errors,
+      businessRules?.errors,
+      businessRules?.schematronErrors
+    );
+
     return res.status(200).json({
       success: true,
-      valid: result.valid && (businessRules ? businessRules.valid && businessRules.schematronValid !== false : true),
-      profile: String(body.profile || 'en16931'),
+      valid: Boolean(xsd.valid && businessRules?.valid && businessRules?.schematronValid !== false),
+      profile: requestedProfile === 'basicwl' ? 'basic-wl' : requestedProfile,
       source,
       filename,
       detectedProfile,
       checks: {
         xmlWellFormed: true,
-        facturXProfileXsd: result.valid,
-        en16931BusinessRules: businessRules ? businessRules.valid : null,
-        schematron: businessRules ? businessRules.schematronValid : null
+        facturXProfileXsd: Boolean(xsd.valid),
+        en16931BusinessRules: businessRules ? Boolean(businessRules.valid) : null,
+        schematron: businessRules ? businessRules.schematronValid ?? null : null
       },
       errors,
       french2026: {
         status: 'readiness-layer',
-        message: 'French BR-FR/2026 CIUS checks are tracked separately from the generic EN 16931 Schematron layer.'
+        message: 'French BR-FR and 2026 mandate checks are not included in this generic EN 16931 validation result.'
       }
     });
   } catch (error) {
