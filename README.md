@@ -8,7 +8,7 @@ Shared serverless infrastructure for x-facture and future products.
 - `GET /api/currency-rates?base=USD` — cached exchange rates.
 - `GET /api/generate-qr?text=...&format=svg|png` — QR generation.
 - `POST /api/invoice-calculate` — deterministic invoice totals and VAT breakdown.
-- `POST /api/generate-invoice` — HTML invoice rendering plus Factur-X EN 16931 embedding.
+- `POST /api/generate-invoice` — HTML invoice rendering, X-Facture-owned CII D22B XML generation, EN 16931 Schematron validation, and Factur-X PDF/A-3 packaging.
 - `POST /api/compliance-check` — structured preflight findings for invoice data, with a versioned country-rule engine (France is the first jurisdiction).
 
 ## Invoice generation
@@ -49,7 +49,14 @@ For production, keep invoice HTML self-contained. The renderer intentionally blo
 
 Set `CHROMIUM_PACK_URL` only if you want to host the matching Chromium pack yourself. The default points to the pinned Chromium 131 pack used by the current Puppeteer dependency.
 
-## Compliance preflight\n\nSend `POST /api/compliance-check` with `{ "rawInvoiceData": { ... } }`, using the same invoice data shape as `/api/generate-invoice`. An optional `jurisdiction` can select a ruleset explicitly (for example `FR`). The response contains a versioned report with `error`, `warning`, and `info` findings and paths back to the relevant fields.\n\nThe current French ruleset validates common invoice essentials and basic identifier formats, and flags routing identifiers for review without deriving them from tax IDs. It is an extensible starting layer, not a declaration of complete French 2026 compliance. It does not prove approval-platform acceptance, transmission, or e-reporting completion.\n\n## Configuration
+## Compliance preflight\n\nSend `POST /api/compliance-check` with `{ "rawInvoiceData": { ... } }`, using the same invoice data shape as `/api/generate-invoice`. An optional `jurisdiction` can select a ruleset explicitly (for example `FR`). The response contains a versioned report with `error`, `warning`, and `info` findings and paths back to the relevant fields.\n\nThe current French ruleset validates common invoice essentials and basic identifier formats, and flags routing identifiers for review without deriving them from tax IDs. It is an extensible starting layer, not a declaration of complete French 2026 compliance. It does not prove approval-platform acceptance, transmission, or e-reporting completion.\n\n
+## Factur-X engine
+
+Invoice data is normalized by X-Facture, serialized by the in-repository CII D22B engine at `lib/facturx/cii.js`, then checked with the Factur-X XSD and EN 16931 Schematron rules before PDF/A-3 packaging. The generated PDF is then checked by extracting the embedded XML back out.
+
+The legacy `@stackforge-eu/factur-x` generation path has been removed. The remaining Factur-X package is used for standards-based validation and PDF/A-3 packaging, not for mapping the X-Facture invoice model into XML. French-specific rules are an additional layer and still require the official applicable French CIUS/Schematron and mandate-specific fixtures before claiming full French compliance.
+
+## Configuration
 
 - `CORS_ORIGIN` — optional allowed origin. Defaults to `*`.
 - `CHROMIUM_PACK_URL` — optional HTTPS URL for the Chromium pack.
