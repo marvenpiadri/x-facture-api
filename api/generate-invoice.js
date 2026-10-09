@@ -86,7 +86,8 @@ function legalOrganization(source) {
     || identifiers.find((candidate) => isPlainObject(candidate) && businessTypes.has(String(candidate.type || '').toUpperCase()) && text(candidate.value, 100));
   if (!item) return undefined;
   const id = text(item.value, 100);
-  const schemeID = text(item.schemeId, 4);
+  const type = String(item.type || '').toUpperCase();
+  const schemeID = text(item.schemeId, 4) || (type === 'SIREN' ? '0002' : undefined);
   const validScheme = schemeID && schemeID.length === 4 && [...schemeID].every(char => char >= '0' && char <= '9');
   return { id, ...(validScheme ? { schemeID } : {}) };
 }
@@ -95,10 +96,11 @@ function globalIdentifier(source) {
   const identifiers = Array.isArray(source?.taxIdentifiers) ? source.taxIdentifiers : [];
   const item = identifiers.find((candidate) => isPlainObject(candidate)
     && ['SIRET', 'GLN', 'DUNS'].includes(String(candidate.type || '').toUpperCase())
-    && text(candidate.value, 100)
-    && ['0009', '0060', '0088'].includes(String(candidate.schemeId || '')));
+    && text(candidate.value, 100));
   if (!item) return undefined;
-  return { value: text(item.value, 100), schemeID: text(item.schemeId, 4) };
+  const type = String(item.type || '').toUpperCase();
+  const schemeID = text(item.schemeId, 4) || (type === 'SIRET' ? '0009' : type === 'GLN' ? '0088' : '0060');
+  return { value: text(item.value, 100), schemeID };
 }
 
 export function buildInvoiceInput(data) {
