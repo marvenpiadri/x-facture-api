@@ -34,6 +34,21 @@ test('serializes normalized invoice as CII D22B XML with safe escaping and ident
   assert.match(xml, /<ram:TaxTotalAmount currencyID="EUR">20\.00<\/ram:TaxTotalAmount>/);
 });
 
+test('generated XML with payment means and due date passes Factur-X XSD and EN 16931 Schematron', async () => {
+  const withPayment = {
+    ...invoice,
+    payment: {
+      meansCode: '58',
+      iban: 'FR7630006000011234567890189',
+      bic: 'BNPAFRPPXXX',
+      dueDate: '2026-10-30',
+      paymentReference: 'INV-2026-001'
+    }
+  };
+  const result = await check({ xml: invoiceToCiiXml(withPayment), schematron: true });
+  assert.equal(result.valid, true, JSON.stringify(result, null, 2));
+});
+
 test('rejects missing invoice model and invalid issue date', () => {
   assert.throws(() => invoiceToCiiXml({}), /normalized invoice model/);
   assert.throws(() => invoiceToCiiXml({ ...invoice, document: { ...invoice.document, issueDate: 'not-a-date' } }), /Issue date/);
