@@ -170,7 +170,7 @@ test('malformed XML produces a readable validation failure response', async () =
   const res = mockResponse();
   await validateHandler(req, res);
 
-  assert.equal(res.statusCode, 422);
+  assert.equal(res.statusCode, 422, JSON.stringify(res.body));
   assert.equal(res.body.success, false);
   assert.equal(typeof res.body.error.message, 'string');
   assert.ok(res.body.error.message.length > 0);
