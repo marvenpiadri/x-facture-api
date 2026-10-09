@@ -1,16 +1,15 @@
-import { extractXml, validateXsd, Profile } from '@stackforge-eu/factur-x';
-import { check } from '@stafyniaksacha/facturx';
+import { check, extract } from '@stafyniaksacha/facturx';
 import { errorResponse, handleOptions, methodNotAllowed, parseJsonBody, prepareResponse } from '../lib/http.js';
 
 const MAX_BYTES = 12 * 1024 * 1024;
 
 const profiles = new Map([
-  ['minimum', { schema: Profile.MINIMUM, level: 'minimum' }],
-  ['basic-wl', { schema: Profile.BASIC_WL, level: 'basicwl' }],
-  ['basicwl', { schema: Profile.BASIC_WL, level: 'basicwl' }],
-  ['basic', { schema: Profile.BASIC, level: 'basic' }],
-  ['en16931', { schema: Profile.EN16931, level: 'en16931' }],
-  ['extended', { schema: Profile.EXTENDED, level: 'extended' }]
+  ['minimum', { level: 'minimum' }],
+  ['basic-wl', { level: 'basicwl' }],
+  ['basicwl', { level: 'basicwl' }],
+  ['basic', { level: 'basic' }],
+  ['en16931', { level: 'en16931' }],
+  ['extended', { level: 'extended' }]
 ]);
 
 function decodeBase64(value) {
@@ -54,7 +53,7 @@ export default async function handler(req, res) {
 
     if (!xml && body.pdfBase64) {
       const pdf = decodeBase64(body.pdfBase64);
-      const extracted = await extractXml(pdf);
+      const extracted = await extract({ pdf, flavor: 'facturx' });
       xml = extracted.xml;
       filename = extracted.filename || filename;
       detectedProfile = extracted.profile;
@@ -63,47 +62,43 @@ export default async function handler(req, res) {
 
     if (!xml.trim()) return errorResponse(res, 400, 'MISSING_DOCUMENT', 'Provide XML or pdfBase64.');
 
-    const xsd = await validateXsd(xml, profile.schema);
     const shouldRunBusinessRules = ['en16931', 'extended'].includes(profile.level);
-    let businessRules = null;
-
-    if (xsd.valid && shouldRunBusinessRules) {
-      try {
-        businessRules = await check({
-          xml,
-          flavor: 'facturx',
-          level: profile.level,
-          schematron: true
-        });
-      } catch (error) {
-        return errorResponse(
-          res,
-          503,
-          'BUSINESS_RULES_UNAVAILABLE',
-          'The XML passed profile XSD validation, but the EN 16931 Schematron check could not complete.',
-          error instanceof Error ? error.message : String(error)
-        );
-      }
+    let validation;
+    try {
+      validation = await check({
+        xml,
+        flavor: 'facturx',
+        level: profile.level,
+        schematron: shouldRunBusinessRules
+      });
+    } catch (error) {
+      return errorResponse(
+        res,
+        503,
+        'VALIDATION_ENGINE_UNAVAILABLE',
+        'The Factur-X XML validation engine could not complete.',
+        error instanceof Error ? error.message : String(error)
+      );
     }
 
-    const errors = uniqueErrors(
-      xsd.errors,
-      businessRules?.errors,
-      businessRules?.schematronErrors
-    );
+    const errors = uniqueErrors(validation.errors, validation.schematronErrors);
+    const xsdValid = errors.length === 0 && (validation.valid || validation.schematronValid === false);
+    const businessRulesValid = shouldRunBusinessRules && validation.schematronValid !== undefined
+      ? Boolean(validation.schematronValid)
+      : null;
 
     return res.status(200).json({
       success: true,
-      valid: Boolean(xsd.valid && (!shouldRunBusinessRules || (businessRules?.valid && businessRules?.schematronValid !== false))),
+      valid: Boolean(validation.valid),
       profile: requestedProfile === 'basicwl' ? 'basic-wl' : requestedProfile,
       source,
       filename,
       detectedProfile,
       checks: {
         xmlWellFormed: true,
-        facturXProfileXsd: Boolean(xsd.valid),
-        en16931BusinessRules: shouldRunBusinessRules && businessRules ? Boolean(businessRules.valid) : null,
-        schematron: shouldRunBusinessRules && businessRules ? businessRules.schematronValid ?? null : null
+        facturXProfileXsd: Boolean(xsdValid),
+        en16931BusinessRules: businessRulesValid,
+        schematron: shouldRunBusinessRules ? validation.schematronValid ?? null : null
       },
       errors,
       french2026: {
