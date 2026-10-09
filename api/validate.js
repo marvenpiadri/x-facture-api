@@ -73,12 +73,24 @@ export default async function handler(req, res) {
         schematron: shouldRunBusinessRules
       });
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const engineUnavailable = /ENOENT|EACCES|ERR_MODULE_NOT_FOUND|WebAssembly|\\bwasm\\b|failed to initialize|could not initialize|schema file.{0,40}not found|cannot (?:open|read|load).{0,40}(?:xsd|schema|schematron)/i.test(detail);
+
+      if (engineUnavailable) {
+        return errorResponse(
+          res,
+          503,
+          'VALIDATION_ENGINE_UNAVAILABLE',
+          'The Factur-X XML validation engine could not complete.',
+          detail
+        );
+      }
+
       return errorResponse(
         res,
-        503,
-        'VALIDATION_ENGINE_UNAVAILABLE',
-        'The Factur-X XML validation engine could not complete.',
-        error instanceof Error ? error.message : String(error)
+        422,
+        'INVALID_DOCUMENT',
+        detail || 'The document could not be validated against the selected Factur-X profile.'
       );
     }
 
