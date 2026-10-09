@@ -311,8 +311,15 @@ export default async function handler(req, res) {
 
     phase = 'factur-x-roundtrip-verification';
     const extracted = await extract({ pdf });
-    if (!extracted?.xml || !extracted.xml.includes('<rsm:CrossIndustryInvoice')) {
+    if (!extracted?.xml || !extracted.xml.includes('CrossIndustryInvoice')) {
       throw Object.assign(new Error('Generated PDF did not retain an extractable CII invoice.'), { phase });
+    }
+    const roundTripValidation = await check({ xml: extracted.xml, schematron: true });
+    if (!roundTripValidation.valid) {
+      throw Object.assign(
+        new Error('The XML extracted from the final PDF failed Factur-X validation.'),
+        { phase, validationErrors: roundTripValidation.errors }
+      );
     }
 
     const safeId = invoice.document.id.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
