@@ -31,7 +31,10 @@ export default async function handler(req, res) {
       updateMetadata: false
     });
     const source = pdf.getAttachments();
-    const attachments = Object.entries(source).map(([name, attachment]) => ({
+    const entries = Array.isArray(source)
+      ? source.map(attachment => [attachment.name, attachment])
+      : Object.entries(source);
+    const attachments = entries.map(([name, attachment]) => ({
       name,
       mimeType: attachment.mimeType || 'application/octet-stream',
       size: attachment.data.length,
