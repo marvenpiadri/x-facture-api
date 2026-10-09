@@ -54,7 +54,7 @@ function taxRegistration(source) {
     if (type === 'VAT' || type === 'GST' || type === 'GSTIN' || type === 'TRN' || type === 'INVOICE_REG') {
       return [{ id, schemeId: 'VA' }];
     }
-    if (['TAX_ID', 'IF', 'EIN', 'TIN', 'NIF', 'CNPJ', 'CPF', 'PAN', 'UTR', 'NPWP', 'KRA_PIN', 'MAT_FISCAL', 'VKN', 'NTN', 'INCOME_TAX'].includes(type || '')) {
+    if (['TAX_ID', 'IF', 'EIN', 'TIN', 'NIF', 'CNPJ', 'CPF', 'PAN', 'UTR', 'NPWP', 'KRA_PIN', 'MAT_FISCAL', 'VKN', 'NTN', 'INCOME_TAX', 'PATENTE'].includes(type || '')) {
       return [{ id, schemeId: 'FC' }];
     }
     return [];
