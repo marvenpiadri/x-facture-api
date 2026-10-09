@@ -101,7 +101,7 @@ function globalIdentifier(source) {
   return { value: text(item.value, 100), schemeID: text(item.schemeId, 4) };
 }
 
-function buildInvoiceInput(data) {
+export function buildInvoiceInput(data) {
   const items = data.items;
   if (!Array.isArray(items) || items.length === 0 || items.length > MAX_ITEMS) {
     throw new Error(`items must contain between 1 and ${MAX_ITEMS} entries.`);
