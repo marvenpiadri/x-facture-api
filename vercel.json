@@ -29,6 +29,9 @@
     "api/validate.js": {
       "includeFiles": "node_modules/@stafyniaksacha/facturx/dist/shared/xsd/**/*"
     },
+    "api/validate-invoice-data.js": {
+      "includeFiles": "node_modules/@stafyniaksacha/facturx/dist/shared/xsd/**/*"
+    },
     "api/validate-order-x.js": {
       "includeFiles": "node_modules/@stafyniaksacha/facturx/dist/shared/xsd/**/*"
     }
