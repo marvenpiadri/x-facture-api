@@ -1,4 +1,4 @@
-import { extract } from '@stafyniaksacha/facturx';
+import { check, extract } from '@stafyniaksacha/facturx';
 import { errorResponse, handleOptions, methodNotAllowed, parseJsonBody, prepareResponse } from '../lib/http.js';
 
 const MAX_BYTES = 12 * 1024 * 1024;
@@ -23,10 +23,11 @@ export default async function handler(req, res) {
 
   try {
     const result = await extract({ pdf: decodePdf(body.pdfBase64), flavor: 'facturx' });
+    const detected = await check({ xml: result.xml, flavor: 'facturx' });
     return res.status(200).json({
       success: true,
       filename: 'factur-x.xml',
-      profile: result.level,
+      profile: detected.level,
       xml: result.xml
     });
   } catch (error) {
