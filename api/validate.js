@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       const extracted = await extract({ pdf, flavor: 'facturx' });
       xml = extracted.xml;
       filename = extracted.filename || filename;
-      detectedProfile = extracted.profile;
+      detectedProfile = extracted.level;
       source = 'pdf';
     }
 
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
     }
 
     const errors = uniqueErrors(validation.errors, validation.schematronErrors);
-    const xsdValid = errors.length === 0 && (validation.valid || validation.schematronValid === false);
+    const xsdValid = Array.isArray(validation.errors) && validation.errors.length === 0;
     const businessRulesValid = shouldRunBusinessRules && validation.schematronValid !== undefined
       ? Boolean(validation.schematronValid)
       : null;
