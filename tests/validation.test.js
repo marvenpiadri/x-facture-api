@@ -231,7 +231,7 @@ test('attachment extraction endpoint returns embedded files with intact content'
   const res = mockResponse();
   await extractAttachmentsHandler(req, res);
 
-  assert.equal(res.statusCode, 200);
+  assert.equal(res.statusCode, 200, JSON.stringify(res.body));
   assert.equal(res.body.success, true);
   assert.equal(res.body.count, 1);
   assert.equal(res.body.attachments[0].name, 'support.txt');
