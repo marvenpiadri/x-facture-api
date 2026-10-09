@@ -173,11 +173,11 @@ function buildInvoiceInput(data) {
       currency
     },
     vatBreakdown: [...vatGroups.values()],
-    ...(data.payment?.iban ? {
+    ...(text(data.payment?.meansCode, 10) ? {
       payment: {
-        meansCode: text(data.payment.meansCode, 10) || '58',
-        iban: text(data.payment.iban, 34),
-        bic: text(data.payment.bic, 11),
+        meansCode: text(data.payment.meansCode, 10),
+        ...(text(data.payment.iban, 34) ? { iban: text(data.payment.iban, 34) } : {}),
+        ...(text(data.payment.bic, 11) ? { bic: text(data.payment.bic, 11) } : {}),
         dueDate: text(data.dueDate, 10),
         paymentReference: text(data.id, 70)
       }
