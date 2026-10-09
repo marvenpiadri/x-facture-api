@@ -1,6 +1,5 @@
-import { check, extract, generate } from '@stafyniaksacha/facturx';
+import { extract, generate } from '@stafyniaksacha/facturx';
 import { invoiceToCiiXml } from '../lib/facturx/cii.js';
-import { validateInvoiceCompliance } from '../lib/compliance/engine.js';
 import {
   errorResponse,
   handleOptions,
@@ -283,16 +282,6 @@ export default async function handler(req, res) {
 
     phase = 'cii-xml-serialization';
     const xml = invoiceToCiiXml(invoice);
-
-    phase = 'cii-xml-validation';
-    let validation;
-    try {
-      validation = await check({ xml, schematron: true });
-      // Validation is diagnostic only here. Invalid XML may still be embedded so
-      // the user can retrieve the PDF and use the separate validator to fix it.
-    } catch (validationError) {
-      console.warn('Factur-X diagnostic validation could not complete:', validationError);
-    }
 
     phase = 'pdf-rendering';
     const standardPdfBuffer = await renderPdf(htmlLayout, paperSize);
