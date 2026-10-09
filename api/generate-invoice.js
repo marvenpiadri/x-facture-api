@@ -197,6 +197,9 @@ export function buildInvoiceInput(data) {
     } : {})
   };
 
+  if (!seller.address.country) throw new Error('Seller country is required for Factur-X XML.');
+  if (!buyer.address.country) throw new Error('Buyer country is required for Factur-X XML.');
+
   const issueDate = text(data.date || data.issueDate, 10) || todayIsoDate();
   if (!isValidIsoDate(issueDate)) {
     throw new Error('Issue date must be a real calendar date in YYYY-MM-DD format.');

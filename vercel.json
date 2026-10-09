@@ -3,7 +3,8 @@
   "functions": {
     "api/generate-invoice.js": {
       "memory": 1536,
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "node_modules/@stafyniaksacha/facturx/dist/shared/xsd/**/*"
     },
     "api/generate-pdf.js": {
       "memory": 1536,
@@ -24,6 +25,12 @@
     "api/health.js": {
       "memory": 128,
       "maxDuration": 5
+    },
+    "api/validate.js": {
+      "includeFiles": "node_modules/@stafyniaksacha/facturx/dist/shared/xsd/**/*"
+    },
+    "api/validate-order-x.js": {
+      "includeFiles": "node_modules/@stafyniaksacha/facturx/dist/shared/xsd/**/*"
     }
   }
 }
