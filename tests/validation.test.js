@@ -123,7 +123,7 @@ test('Factur-X input defaults a missing issue date to today and preserves identi
     }
   });
 
-  assert.match(invoice.document.issueDate, /^\\d{4}-\\d{2}-\\d{2}$/);
+  assert.match(invoice.document.issueDate, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/);
   assert.equal(invoice.seller.legalOrganization.id, '123456789');
   assert.equal(invoice.seller.legalOrganization.schemeID, '0002');
   assert.equal(invoice.seller.globalId.value, '12345678900012');
