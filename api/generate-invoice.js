@@ -45,9 +45,33 @@ function addressFrom(source) {
 }
 
 function taxRegistration(source) {
+  const identifiers = Array.isArray(source?.taxIdentifiers) ? source.taxIdentifiers : [];
+  const mapped = identifiers.flatMap((item) => {
+    if (!isPlainObject(item)) return [];
+    const id = text(item.value, 100);
+    if (!id) return [];
+    const type = text(item.type, 40)?.toUpperCase();
+    if (type === 'VAT' || type === 'GST' || type === 'GSTIN' || type === 'TRN' || type === 'INVOICE_REG') {
+      return [{ id, schemeId: 'VA' }];
+    }
+    if (['TAX_ID', 'IF', 'EIN', 'TIN', 'NIF', 'CNPJ', 'CPF', 'PAN', 'UTR', 'NPWP', 'KRA_PIN', 'MAT_FISCAL', 'VKN', 'NTN', 'INCOME_TAX'].includes(type || '')) {
+      return [{ id, schemeId: 'FC' }];
+    }
+    return [];
+  });
+  if (mapped.length) return mapped;
   const vatId = text(source?.vatId || source?.vat || source?.taxId, 100);
-  if (!vatId) return undefined;
-  return [{ id: vatId, schemeId: 'VA' }];
+  return vatId ? [{ id: vatId, schemeId: 'VA' }] : undefined;
+}
+
+function legalOrganization(source) {
+  const identifiers = Array.isArray(source?.taxIdentifiers) ? source.taxIdentifiers : [];
+  const businessTypes = new Set(['ICE', 'SIREN', 'SIRET', 'CNPJ', 'CRN', 'CBE', 'KVK', 'ABN', 'ACN', 'NZBN', 'CIN', 'UEN', 'USCC', 'CR', 'RC', 'ORG_NO', 'CVR', 'BUSINESS_ID', 'CUI', 'KRS', 'REGON', 'NIB', 'MERSIS', 'EDRPOU']);
+  const item = identifiers.find((candidate) => isPlainObject(candidate) && businessTypes.has(String(candidate.type || '').toUpperCase()) && text(candidate.value, 100));
+  if (!item) return undefined;
+  const id = text(item.value, 100);
+  const schemeID = text(item.schemeId, 4);
+  return { id, ...(schemeID && /^\\d{4}$/.test(schemeID) ? { schemeID } : {}) };
 }
 
 function buildInvoiceInput(data) {
@@ -111,7 +135,7 @@ function buildInvoiceInput(data) {
     taxRegistrations: taxRegistration(data.seller || {
       vatId: data.sellerVat
     }),
-    ...(data.sellerSiren ? { legalOrganization: { id: text(data.sellerSiren, 9), schemeID: '0002' } } : {}),
+    ...(legalOrganization(data.seller || {}) ? { legalOrganization: legalOrganization(data.seller || {}) } : (data.sellerSiren ? { legalOrganization: { id: text(data.sellerSiren, 9), schemeID: '0002' } } : {})),
     ...(data.seller?.electronicAddress && data.seller?.electronicAddressScheme ? {
       electronicAddress: {
         value: text(data.seller.electronicAddress, 200),
@@ -136,7 +160,7 @@ function buildInvoiceInput(data) {
     name: text(buyerSource.name),
     address: addressFrom(buyerSource),
     taxRegistrations: taxRegistration(buyerSource),
-    ...(data.buyerSiren ? { legalOrganization: { id: text(data.buyerSiren, 9), schemeID: '0002' } } : {}),
+    ...(legalOrganization(buyerSource) ? { legalOrganization: legalOrganization(buyerSource) } : (data.buyerSiren ? { legalOrganization: { id: text(data.buyerSiren, 9), schemeID: '0002' } } : {})),
     ...(buyerSource.electronicAddress && buyerSource.electronicAddressScheme ? {
       electronicAddress: {
         value: text(buyerSource.electronicAddress, 200),
