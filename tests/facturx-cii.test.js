@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { check } from '@stafyniaksacha/facturx';
 import { invoiceToCiiXml } from '../lib/facturx/cii.js';
 
 const invoice = {
@@ -12,7 +13,7 @@ const invoice = {
     taxRegistrations: [{ id: 'FR12345678901', schemeId: 'VA' }],
     electronicAddress: { value: '123456789', schemeID: '0225' }
   },
-  buyer: { name: 'Buyer Co', address: { city: 'Lyon', country: 'FR' }, taxRegistrations: [] },
+  buyer: { name: 'Buyer Co', address: { line1: '2 Main Street', postalCode: '69001', city: 'Lyon', country: 'FR' }, taxRegistrations: [] },
   lines: [{
     id: '1', name: 'Consulting & delivery', quantity: 2, unitCode: 'C62',
     unitPrice: 50, lineTotal: 100, vatCategoryCode: 'S', vatRatePercent: 20
@@ -21,7 +22,7 @@ const invoice = {
   totals: { lineTotal: 100, taxBasisTotal: 100, taxTotal: 20, grandTotal: 120, duePayableAmount: 120, currency: 'EUR' }
 };
 
-test('serializes a normalized invoice as CII D22B XML', () => {
+test('serializes normalized invoice as CII D22B XML with safe escaping and identifier schemes', () => {
   const xml = invoiceToCiiXml(invoice);
   assert.match(xml, /CrossIndustryInvoice/);
   assert.match(xml, /urn:cen\.eu:en16931:2017/);
@@ -36,4 +37,9 @@ test('serializes a normalized invoice as CII D22B XML', () => {
 test('rejects missing invoice model and invalid issue date', () => {
   assert.throws(() => invoiceToCiiXml({}), /normalized invoice model/);
   assert.throws(() => invoiceToCiiXml({ ...invoice, document: { ...invoice.document, issueDate: 'not-a-date' } }), /Issue date/);
+});
+
+test('generated XML passes the bundled Factur-X schema and EN 16931 Schematron checks', async () => {
+  const result = await check({ xml: invoiceToCiiXml(invoice), schematron: true });
+  assert.equal(result.valid, true, JSON.stringify(result.errors || [], null, 2));
 });
