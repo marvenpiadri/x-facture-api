@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { check, generate } from '@stafyniaksacha/facturx';
 import { PDFDocument } from 'pdf-lib';
 import validateHandler from '../api/validate.js';
+import extractHandler from '../api/extract.js';
+import embedHandler from '../api/embed.js';
 import validateOrderXHandler from '../api/validate-order-x.js';
 import { buildInvoiceInput } from '../api/generate-invoice.js';
 
@@ -19,6 +21,7 @@ function mockResponse() {
     setHeader(name, value) { this.headers[name] = value; return this; },
     status(code) { this.statusCode = code; return this; },
     json(value) { this.body = value; return this; },
+    send(value) { this.body = value; return this; },
     end() { return this; }
   };
 }
@@ -174,4 +177,41 @@ test('malformed XML produces a readable validation failure response', async () =
   assert.equal(res.body.success, false);
   assert.equal(typeof res.body.error.message, 'string');
   assert.ok(res.body.error.message.length > 0);
+});
+
+
+test('Factur-X extraction endpoint returns the embedded XML from a generated PDF', async () => {
+  const source = await PDFDocument.create();
+  source.addPage([595, 842]);
+  const pdf = Buffer.from(await generate({ pdf: Buffer.from(await source.save()), xml: facturXXml }));
+
+  const req = { method: 'POST', headers: {}, body: { pdfBase64: pdf.toString('base64') } };
+  const res = mockResponse();
+  await extractHandler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.match(res.body.xml, /CrossIndustryInvoice/);
+  assert.equal(res.body.profile, 'en16931');
+});
+
+test('embed endpoint validates XML and returns a PDF with extractable invoice XML', async () => {
+  const source = await PDFDocument.create();
+  source.addPage([595, 842]);
+  const sourcePdf = Buffer.from(await source.save());
+
+  const req = {
+    method: 'POST',
+    headers: {},
+    body: { pdfBase64: sourcePdf.toString('base64'), xml: facturXXml, profile: 'en16931' }
+  };
+  const res = mockResponse();
+  await embedHandler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['Content-Type'], 'application/pdf');
+  assert.equal(Buffer.from(res.body).subarray(0, 5).toString(), '%PDF-');
+
+  const extracted = await extract({ pdf: Buffer.from(res.body), flavor: 'facturx' });
+  assert.match(extracted.xml, /FA-2017-0010/);
 });
