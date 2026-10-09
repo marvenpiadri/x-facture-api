@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { check } from '@stafyniaksacha/facturx';
 import validateHandler from '../api/validate.js';
 import validateOrderXHandler from '../api/validate-order-x.js';
+import { buildInvoiceInput } from '../api/generate-invoice.js';
 
 const facturXXml = await readFile(new URL('./fixtures/factur-x-en16931.xml', import.meta.url), 'utf8');
 const facturXMinimumXml = await readFile(new URL('./fixtures/factur-x-minimum.xml', import.meta.url), 'utf8');
@@ -94,4 +95,48 @@ test('minimum-profile invoices are validated against their XSD without EN 16931-
   assert.equal(res.body.checks.facturXProfileXsd, true);
   assert.equal(res.body.checks.en16931BusinessRules, null);
   assert.equal(res.body.checks.schematron, null);
+});
+
+
+test('Factur-X input defaults a missing issue date to today and preserves identifier schemes', () => {
+  const invoice = buildInvoiceInput({
+    id: 'INV-TEST-1',
+    currency: 'EUR',
+    items: [{ description: 'Service', quantity: 1, unitPrice: 100, vatRate: 20 }],
+    seller: {
+      name: 'French seller',
+      country: 'FR',
+      taxIdentifiers: [
+        { id: 'siren', type: 'SIREN', value: '123456789', schemeId: '0002' },
+        { id: 'siret', type: 'SIRET', value: '12345678900012', schemeId: '0009' },
+        { id: 'vat', type: 'VAT', value: 'FR12123456789' }
+      ],
+      electronicAddress: '123456789',
+      electronicAddressScheme: '0225'
+    },
+    buyer: {
+      name: 'French buyer',
+      country: 'FR',
+      taxIdentifiers: [{ id: 'buyer-siren', type: 'SIREN', value: '987654321', schemeId: '0002' }],
+      electronicAddress: '987654321',
+      electronicAddressScheme: '0225'
+    }
+  });
+
+  assert.match(invoice.document.issueDate, /^\\d{4}-\\d{2}-\\d{2}$/);
+  assert.equal(invoice.seller.legalOrganization.id, '123456789');
+  assert.equal(invoice.seller.legalOrganization.schemeID, '0002');
+  assert.equal(invoice.seller.globalId.value, '12345678900012');
+  assert.equal(invoice.seller.globalId.schemeID, '0009');
+  assert.equal(invoice.seller.taxRegistrations[0].schemeId, 'VA');
+  assert.deepEqual(invoice.seller.electronicAddress, { value: '123456789', schemeID: '0225' });
+  assert.deepEqual(invoice.buyer.electronicAddress, { value: '987654321', schemeID: '0225' });
+});
+
+test('Factur-X input rejects impossible issue dates', () => {
+  assert.throws(() => buildInvoiceInput({
+    id: 'INV-TEST-2',
+    issueDate: '2026-02-30',
+    items: [{ description: 'Service', quantity: 1, unitPrice: 10, vatRate: 0 }]
+  }), /real calendar date/);
 });
