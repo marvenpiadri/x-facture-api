@@ -41,5 +41,5 @@ test('rejects missing invoice model and invalid issue date', () => {
 
 test('generated XML passes the bundled Factur-X schema and EN 16931 Schematron checks', async () => {
   const result = await check({ xml: invoiceToCiiXml(invoice), schematron: true });
-  assert.equal(result.valid, true, JSON.stringify(result.errors || [], null, 2));
+  assert.equal(result.valid, true, JSON.stringify(result, null, 2));
 });
