@@ -56,7 +56,8 @@ export default async function handler(req, res) {
       const extracted = await extract({ pdf, flavor: 'facturx' });
       xml = extracted.xml;
       filename = extracted.filename || filename;
-      detectedProfile = extracted.level;
+      const detected = await check({ xml, flavor: 'facturx' });
+      detectedProfile = detected.level;
       source = 'pdf';
     }
 
