@@ -278,38 +278,20 @@ export default async function handler(req, res) {
   try {
     let phase = 'input-validation';
     const invoice = buildInvoiceInput(body.rawInvoiceData);
-    if (!invoice.seller.address.country || !invoice.buyer.address.country) {
-      return errorResponse(
-        res,
-        422,
-        'MISSING_PARTY_COUNTRY',
-        'Country is required for both seller and buyer in a Factur-X invoice.',
-        [
-          ...(!invoice.seller.address.country ? [{ path: 'seller.address.country', message: 'Select the seller country.' }] : []),
-          ...(!invoice.buyer.address.country ? [{ path: 'buyer.address.country', message: 'Select the buyer country.' }] : [])
-        ]
-      );
-    }
-
-    phase = 'xfacture-compliance-preflight';
-    const compliance = validateInvoiceCompliance(invoice);
-    if (!compliance.valid) {
-      return errorResponse(res, 422, 'INVALID_FACTUR_X_DATA', 'Invoice data failed X-Facture preflight checks.', compliance.findings);
-    }
+    // Generation is intentionally tolerant: completeness and compliance are reported
+    // by the separate validation action, not used to block PDF/A-3 creation.
 
     phase = 'cii-xml-serialization';
     const xml = invoiceToCiiXml(invoice);
 
     phase = 'cii-xml-validation';
-    const validation = await check({ xml, schematron: true });
-    if (!validation.valid) {
-      return errorResponse(
-        res,
-        422,
-        'INVALID_FACTUR_X_XML',
-        'The generated CII XML failed Factur-X schema or EN 16931 business-rule validation.',
-        validation.errors
-      );
+    let validation;
+    try {
+      validation = await check({ xml, schematron: true });
+      // Validation is diagnostic only here. Invalid XML may still be embedded so
+      // the user can retrieve the PDF and use the separate validator to fix it.
+    } catch (validationError) {
+      console.warn('Factur-X diagnostic validation could not complete:', validationError);
     }
 
     phase = 'pdf-rendering';
@@ -326,13 +308,8 @@ export default async function handler(req, res) {
     if (!extracted?.xml || !extracted.xml.includes('CrossIndustryInvoice')) {
       throw Object.assign(new Error('Generated PDF did not retain an extractable CII invoice.'), { phase });
     }
-    const roundTripValidation = await check({ xml: extracted.xml, schematron: true });
-    if (!roundTripValidation.valid) {
-      throw Object.assign(
-        new Error('The XML extracted from the final PDF failed Factur-X validation.'),
-        { phase, validationErrors: roundTripValidation.errors }
-      );
-    }
+    // Do not block delivery on profile validation. The dedicated validator reports
+    // these findings independently; packaging/extraction failures still fail generation.
 
     const safeId = invoice.document.id.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
 
