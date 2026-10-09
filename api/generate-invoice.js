@@ -1,9 +1,6 @@
-import {
-  embedFacturX,
-  validateInput,
-  Profile,
-  Flavor
-} from '@stackforge-eu/factur-x';
+import { check, extract, generate } from '@stafyniaksacha/facturx';
+import { invoiceToCiiXml } from '../lib/facturx/cii.js';
+import { validateInvoiceCompliance } from '../lib/compliance/engine.js';
 import {
   errorResponse,
   handleOptions,
