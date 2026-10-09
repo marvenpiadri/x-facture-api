@@ -6,6 +6,7 @@ import { PDFDocument } from 'pdf-lib';
 import validateHandler from '../api/validate.js';
 import extractHandler from '../api/extract.js';
 import embedHandler from '../api/embed.js';
+import extractAttachmentsHandler from '../api/extract-attachments.js';
 import validateOrderXHandler from '../api/validate-order-x.js';
 import { buildInvoiceInput } from '../api/generate-invoice.js';
 
@@ -214,4 +215,25 @@ test('embed endpoint validates XML and returns a PDF with extractable invoice XM
 
   const extracted = await extract({ pdf: Buffer.from(res.body), flavor: 'facturx' });
   assert.match(extracted.xml, /FA-2017-0010/);
+});
+
+
+test('attachment extraction endpoint returns embedded files with intact content', async () => {
+  const source = await PDFDocument.create();
+  source.addPage([595, 842]);
+  await source.attach(new TextEncoder().encode('Invoice supporting document'), 'support.txt', {
+    mimeType: 'text/plain',
+    description: 'Supporting document'
+  });
+  const pdf = Buffer.from(await source.save());
+
+  const req = { method: 'POST', headers: {}, body: { pdfBase64: pdf.toString('base64') } };
+  const res = mockResponse();
+  await extractAttachmentsHandler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.count, 1);
+  assert.equal(res.body.attachments[0].name, 'support.txt');
+  assert.equal(Buffer.from(res.body.attachments[0].dataBase64, 'base64').toString(), 'Invoice supporting document');
 });
