@@ -197,9 +197,6 @@ export function buildInvoiceInput(data) {
     } : {})
   };
 
-  if (!seller.address.country) throw new Error('Seller country is required for Factur-X XML.');
-  if (!buyer.address.country) throw new Error('Buyer country is required for Factur-X XML.');
-
   const issueDate = text(data.date || data.issueDate, 10) || todayIsoDate();
   if (!isValidIsoDate(issueDate)) {
     throw new Error('Issue date must be a real calendar date in YYYY-MM-DD format.');
@@ -281,6 +278,18 @@ export default async function handler(req, res) {
   try {
     let phase = 'input-validation';
     const invoice = buildInvoiceInput(body.rawInvoiceData);
+    if (!invoice.seller.address.country || !invoice.buyer.address.country) {
+      return errorResponse(
+        res,
+        422,
+        'MISSING_PARTY_COUNTRY',
+        'Country is required for both seller and buyer in a Factur-X invoice.',
+        [
+          ...(!invoice.seller.address.country ? [{ path: 'seller.address.country', message: 'Select the seller country.' }] : []),
+          ...(!invoice.buyer.address.country ? [{ path: 'buyer.address.country', message: 'Select the buyer country.' }] : [])
+        ]
+      );
+    }
 
     phase = 'xfacture-compliance-preflight';
     const compliance = validateInvoiceCompliance(invoice);
