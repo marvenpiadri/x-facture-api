@@ -78,12 +78,24 @@ function taxRegistration(source) {
 
 function legalOrganization(source) {
   const identifiers = Array.isArray(source?.taxIdentifiers) ? source.taxIdentifiers : [];
-  const businessTypes = new Set(['ICE', 'SIREN', 'SIRET', 'CNPJ', 'CRN', 'CBE', 'KVK', 'ABN', 'ACN', 'NZBN', 'CIN', 'UEN', 'USCC', 'CR', 'RC', 'ORG_NO', 'CVR', 'BUSINESS_ID', 'CUI', 'KRS', 'REGON', 'NIB', 'MERSIS', 'EDRPOU']);
-  const item = identifiers.find((candidate) => isPlainObject(candidate) && businessTypes.has(String(candidate.type || '').toUpperCase()) && text(candidate.value, 100));
+  const businessTypes = new Set(['ICE', 'SIREN', 'RC', 'RCS', 'CRN', 'CBE', 'KVK', 'ABN', 'ACN', 'NZBN', 'CIN', 'UEN', 'USCC', 'CR', 'ORG_NO', 'CVR', 'BUSINESS_ID', 'CUI', 'KRS', 'REGON', 'NIB', 'MERSIS', 'EDRPOU']);
+  const item = identifiers.find((candidate) => isPlainObject(candidate) && String(candidate.type || '').toUpperCase() === 'SIREN' && text(candidate.value, 100))
+    || identifiers.find((candidate) => isPlainObject(candidate) && candidate.schemeId && !['0009', '0060', '0088'].includes(String(candidate.schemeId)) && businessTypes.has(String(candidate.type || '').toUpperCase()) && text(candidate.value, 100))
+    || identifiers.find((candidate) => isPlainObject(candidate) && businessTypes.has(String(candidate.type || '').toUpperCase()) && text(candidate.value, 100));
   if (!item) return undefined;
   const id = text(item.value, 100);
   const schemeID = text(item.schemeId, 4);
   return { id, ...(schemeID && /^\\d{4}$/.test(schemeID) ? { schemeID } : {}) };
+}
+
+function globalIdentifier(source) {
+  const identifiers = Array.isArray(source?.taxIdentifiers) ? source.taxIdentifiers : [];
+  const item = identifiers.find((candidate) => isPlainObject(candidate)
+    && ['SIRET', 'GLN', 'DUNS'].includes(String(candidate.type || '').toUpperCase())
+    && text(candidate.value, 100)
+    && ['0009', '0060', '0088'].includes(String(candidate.schemeId || '')));
+  if (!item) return undefined;
+  return { value: text(item.value, 100), schemeID: text(item.schemeId, 4) };
 }
 
 function buildInvoiceInput(data) {
@@ -148,6 +160,7 @@ function buildInvoiceInput(data) {
       vatId: data.sellerVat
     }),
     ...(legalOrganization(data.seller || {}) ? { legalOrganization: legalOrganization(data.seller || {}) } : (data.sellerSiren ? { legalOrganization: { id: text(data.sellerSiren, 9), schemeID: '0002' } } : {})),
+    ...(globalIdentifier(data.seller || {}) ? { globalId: globalIdentifier(data.seller || {}) } : {}),
     ...(data.seller?.electronicAddress && data.seller?.electronicAddressScheme ? {
       electronicAddress: {
         value: text(data.seller.electronicAddress, 200),
@@ -173,6 +186,7 @@ function buildInvoiceInput(data) {
     address: addressFrom(buyerSource),
     taxRegistrations: taxRegistration(buyerSource),
     ...(legalOrganization(buyerSource) ? { legalOrganization: legalOrganization(buyerSource) } : (data.buyerSiren ? { legalOrganization: { id: text(data.buyerSiren, 9), schemeID: '0002' } } : {})),
+    ...(globalIdentifier(buyerSource) ? { globalId: globalIdentifier(buyerSource) } : {}),
     ...(buyerSource.electronicAddress && buyerSource.electronicAddressScheme ? {
       electronicAddress: {
         value: text(buyerSource.electronicAddress, 200),
