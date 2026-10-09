@@ -32,10 +32,8 @@ test('French compliance engine passes well-formed party identifiers and invoice 
 
 test('French compliance engine reports malformed SIREN and SIRET as errors', () => {
   const invoice = structuredClone(baseInvoice);
-  invoice.seller.taxIdentifiers = [
-    { type: 'SIREN', value: '1234' },
-    { type: 'SIRET', value: '123456' }
-  ];
+  invoice.seller.legalOrganization = { id: '1234', schemeID: '0002' };
+  invoice.seller.globalId = { value: '123456', schemeID: '0009' };
   const result = validateInvoiceCompliance(invoice);
   assert.equal(result.valid, false);
   assert.ok(result.findings.some((item) => item.ruleId === 'FR-ID-001' && item.severity === 'error'));
