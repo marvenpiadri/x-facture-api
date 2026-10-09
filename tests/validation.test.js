@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { check, generate } from '@stafyniaksacha/facturx';
+import { check, extract, generate } from '@stafyniaksacha/facturx';
 import { PDFDocument } from 'pdf-lib';
 import validateHandler from '../api/validate.js';
 import extractHandler from '../api/extract.js';
