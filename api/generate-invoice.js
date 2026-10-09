@@ -292,6 +292,18 @@ export default async function handler(req, res) {
       throw Object.assign(new Error('Factur-X packaging returned invalid PDF bytes.'), { phase: 'factur-x-output-validation' });
     }
 
+    // The Factur-X packager is expected to set PDF/A-3 identification metadata.
+    // Check the emitted XMP marker as well as the XML attachment round trip below.
+    const pdfMetadata = pdf.toString('latin1');
+    const hasPdfA3Part = /<pdfaid:part>\\s*3\\s*<\\/pdfaid:part>|pdfaid:part\\s*=\\s*["']3["']/i.test(pdfMetadata);
+    const hasPdfAConformance = /<pdfaid:conformance>\\s*[ABU]\\s*<\\/pdfaid:conformance>|pdfaid:conformance\\s*=\\s*["'][ABU]["']/i.test(pdfMetadata);
+    if (!hasPdfA3Part || !hasPdfAConformance) {
+      throw Object.assign(
+        new Error('Factur-X packaging did not expose the expected PDF/A-3 XMP conformance markers.'),
+        { phase: 'pdfa3-verification' }
+      );
+    }
+
     phase = 'factur-x-roundtrip-verification';
     const extracted = await extract({ pdf });
     if (!extracted?.xml || !extracted.xml.includes('CrossIndustryInvoice')) {
