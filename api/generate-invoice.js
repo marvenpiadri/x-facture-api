@@ -51,10 +51,10 @@ function taxRegistration(source) {
     const id = text(item.value, 100);
     if (!id) return [];
     const type = text(item.type, 40)?.toUpperCase();
-    if (type === 'VAT' || type === 'GST' || type === 'GSTIN' || type === 'TRN' || type === 'INVOICE_REG') {
+    if (type === 'VAT') {
       return [{ id, schemeId: 'VA' }];
     }
-    if (['TAX_ID', 'IF', 'EIN', 'TIN', 'NIF', 'CNPJ', 'CPF', 'PAN', 'UTR', 'NPWP', 'KRA_PIN', 'MAT_FISCAL', 'VKN', 'NTN', 'INCOME_TAX', 'PATENTE'].includes(type || '')) {
+    if (['TAX_ID', 'IF', 'EIN', 'TIN', 'NIF', 'CNPJ', 'CPF', 'PAN', 'UTR', 'NPWP', 'KRA_PIN', 'MAT_FISCAL', 'VKN', 'NTN', 'INCOME_TAX', 'PATENTE', 'GST', 'GSTIN', 'TRN', 'INVOICE_REG', 'SALES_TAX', 'SST'].includes(type || '')) {
       return [{ id, schemeId: 'FC' }];
     }
     return [];
