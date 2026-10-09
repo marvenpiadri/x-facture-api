@@ -128,7 +128,7 @@ export function buildInvoiceInput(data) {
       unitCode: text(item.unitCode, 10) || 'C62',
       unitPrice,
       lineTotal,
-      vatCategoryCode: 'S',
+      vatCategoryCode: vatRate === 0 ? 'Z' : 'S',
       vatRatePercent: vatRate
     };
   });
@@ -139,7 +139,7 @@ export function buildInvoiceInput(data) {
   for (const line of lines) {
     const key = line.vatRatePercent.toFixed(2);
     const group = vatGroups.get(key) || {
-      categoryCode: 'S',
+      categoryCode: line.vatCategoryCode,
       ratePercent: line.vatRatePercent,
       taxableAmount: 0,
       taxAmount: 0
