@@ -87,7 +87,8 @@ function legalOrganization(source) {
   if (!item) return undefined;
   const id = text(item.value, 100);
   const schemeID = text(item.schemeId, 4);
-  return { id, ...(schemeID && /^\\d{4}$/.test(schemeID) ? { schemeID } : {}) };
+  const validScheme = schemeID && schemeID.length === 4 && [...schemeID].every(char => char >= '0' && char <= '9');
+  return { id, ...(validScheme ? { schemeID } : {}) };
 }
 
 function globalIdentifier(source) {
