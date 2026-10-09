@@ -34,6 +34,7 @@ test('Factur-X generation returns a PDF artifact', async () => {
   await validateHandler(validationReq, validationRes);
   assert.equal(validationRes.statusCode, 200, JSON.stringify(validationRes.body));
   assert.equal(validationRes.body.source, 'pdf');
+  assert.equal(validationRes.body.detectedProfile, 'en16931');
   assert.equal(validationRes.body.valid, true, JSON.stringify(validationRes.body.errors));
   assert.equal(validationRes.body.checks.facturXProfileXsd, true);
   assert.equal(validationRes.body.checks.en16931BusinessRules, true);
