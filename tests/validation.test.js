@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { check } from '@stafyniaksacha/facturx';
+import { check, generate } from '@stafyniaksacha/facturx';
+import { PDFDocument } from 'pdf-lib';
 import validateHandler from '../api/validate.js';
 import validateOrderXHandler from '../api/validate-order-x.js';
 import { buildInvoiceInput } from '../api/generate-invoice.js';
@@ -139,4 +140,38 @@ test('Factur-X input rejects impossible issue dates', () => {
     issueDate: '2026-02-30',
     items: [{ description: 'Service', quantity: 1, unitPrice: 10, vatRate: 0 }]
   }), /real calendar date/);
+});
+
+
+test('Factur-X PDF upload is extracted and validated by the API endpoint', async () => {
+  const source = await PDFDocument.create();
+  source.addPage([595, 842]);
+  const sourcePdf = Buffer.from(await source.save());
+  const pdf = Buffer.from(await generate({ pdf: sourcePdf, xml: facturXXml }));
+
+  const req = {
+    method: 'POST',
+    headers: {},
+    body: { pdfBase64: pdf.toString('base64'), profile: 'en16931' }
+  };
+  const res = mockResponse();
+  await validateHandler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.source, 'pdf');
+  assert.equal(res.body.valid, true, JSON.stringify(res.body.errors));
+  assert.equal(res.body.checks.facturXProfileXsd, true);
+  assert.equal(res.body.checks.en16931BusinessRules, true);
+});
+
+test('malformed XML produces a readable validation failure response', async () => {
+  const req = { method: 'POST', headers: {}, body: { xml: '<CrossIndustryInvoice><broken>', profile: 'en16931' } };
+  const res = mockResponse();
+  await validateHandler(req, res);
+
+  assert.equal(res.statusCode, 422);
+  assert.equal(res.body.success, false);
+  assert.equal(typeof res.body.error.message, 'string');
+  assert.ok(res.body.error.message.length > 0);
 });
