@@ -19,5 +19,5 @@ test('Factur-X packaging emits PDF/A-3 metadata and retains extractable CII XML'
 
   const extracted = await extract({ pdf: output });
   assert.match(extracted.xml, /CrossIndustryInvoice/);
-  assert.match(extracted.xml, /INV-2026-001/);
+  assert.match(extracted.xml, /FA-2017-0010/);
 });
