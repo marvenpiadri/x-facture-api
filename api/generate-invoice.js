@@ -282,14 +282,23 @@ export default async function handler(req, res) {
     let phase = 'input-validation';
     const invoice = buildInvoiceInput(body.rawInvoiceData);
 
-    phase = 'factur-x-input-validation';
-    const validation = validateInput(invoice, Profile.EN16931);
+    phase = 'xfacture-compliance-preflight';
+    const compliance = validateInvoiceCompliance(invoice);
+    if (!compliance.valid) {
+      return errorResponse(res, 422, 'INVALID_FACTUR_X_DATA', 'Invoice data failed X-Facture preflight checks.', compliance.findings);
+    }
+
+    phase = 'cii-xml-serialization';
+    const xml = invoiceToCiiXml(invoice);
+
+    phase = 'cii-xml-validation';
+    const validation = await check({ xml, schematron: true });
     if (!validation.valid) {
       return errorResponse(
         res,
         422,
-        'INVALID_FACTUR_X_DATA',
-        'Invoice data does not satisfy EN 16931 requirements.',
+        'INVALID_FACTUR_X_XML',
+        'The generated CII XML failed Factur-X schema or EN 16931 business-rule validation.',
         validation.errors
       );
     }
@@ -297,18 +306,16 @@ export default async function handler(req, res) {
     phase = 'pdf-rendering';
     const standardPdfBuffer = await renderPdf(htmlLayout, paperSize);
 
-    phase = 'factur-x-embedding';
-    const result = await embedFacturX({
-      pdf: standardPdfBuffer,
-      input: invoice,
-      profile: Profile.EN16931,
-      flavor: Flavor.FACTUR_X,
-      validateXsd: true
-    });
-
-    const pdf = Buffer.from(result.pdf);
+    phase = 'factur-x-pdf-a3-packaging';
+    const pdf = Buffer.from(await generate({ pdf: standardPdfBuffer, xml }));
     if (pdf.subarray(0, 5).toString() !== '%PDF-') {
-      throw Object.assign(new Error('Factur-X embedding returned invalid PDF bytes.'), { phase: 'factur-x-output-validation' });
+      throw Object.assign(new Error('Factur-X packaging returned invalid PDF bytes.'), { phase: 'factur-x-output-validation' });
+    }
+
+    phase = 'factur-x-roundtrip-verification';
+    const extracted = await extract({ pdf });
+    if (!extracted?.xml || !extracted.xml.includes('<rsm:CrossIndustryInvoice')) {
+      throw Object.assign(new Error('Generated PDF did not retain an extractable CII invoice.'), { phase });
     }
 
     const safeId = invoice.document.id.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
