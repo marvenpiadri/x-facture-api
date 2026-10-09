@@ -32,6 +32,18 @@ function country(value) {
   return /^[A-Z]{2}$/.test(code || '') ? code : undefined;
 }
 
+function todayIsoDate() {
+  const now = new Date();
+  return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+}
+
+function isValidIsoDate(value) {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value || '')) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
 function addressFrom(source) {
   const address = source?.address || {};
   const result = {
@@ -169,9 +181,9 @@ function buildInvoiceInput(data) {
     } : {})
   };
 
-  const issueDate = text(data.date || data.issueDate, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(issueDate || '')) {
-    throw new Error('date must use YYYY-MM-DD format.');
+  const issueDate = text(data.date || data.issueDate, 10) || todayIsoDate();
+  if (!isValidIsoDate(issueDate)) {
+    throw new Error('Issue date must be a real calendar date in YYYY-MM-DD format.');
   }
 
   const id = text(data.id || data.invoiceNumber, 100);
